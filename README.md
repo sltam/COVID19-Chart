@@ -1,7 +1,7 @@
-# Covid19-Chart
+# COVID19-Chart
 A simple page for visualisation of covid19 development per country.
 
-View the chart here: https://dersticher.github.io/Covid19-Chart/
+View the chart here: https://sltam.github.io/COVID19-Chart/
 
 # Third party projects used
 * ChartJS (https://www.chartjs.org/)
