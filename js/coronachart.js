@@ -22,6 +22,7 @@ const colorForCaseKind = {
     Increase: "hsl(%d, 50%, 50%)",
 };
 var _logScale = false;
+var _alignment = "date";
 var _countries = [];
 var _selectedCountries = [];
 var _selectedCaseKinds = [];
@@ -152,17 +153,50 @@ function CreatePercentageDataset(label, data, color) {
     }
 }
 
+function ClearChartData() {
+    _coronaChart.data.datasets = [];
+}
+
 function UpdateChartData() {
     const datasets = _coronaChart.data.datasets;
-    datasets.splice(0, datasets.length);
-    for (const caseKind of _selectedCaseKinds) {
-        for (const [countryIndex, countryName] of _selectedCountries.entries()) {
+    datasets.map(dataset => dataset.toDelete = true);
+    let maxLength = 0;
+    for (const [countryIndex, countryName] of _selectedCountries.entries()) {
+        let shift = 0; // Number of initial entries to drop
+        if (_alignment == "since100") {
+            shift = _confirmedPerCountry[countryName].filter(x => x < 100).length;
+        }
+        for (const caseKind of _selectedCaseKinds) {
+            const id = `${countryName}-${caseKind}`;
             const suffix = _selectedCaseKinds.length == 1 ? "" : `-${caseKind}`;
             const cases = casesPerCountryForCaseKind[caseKind][countryName];
             const color = colorForCaseKind[caseKind].replace("%d", countryIndex * 360 / _selectedCountries.length);
             const dataset = functionForCaseKind[caseKind](`${countryName}${suffix}`, cases, color);
-            datasets.push(dataset);
+            dataset.id = id;
+            dataset.data = dataset.data.slice(shift);
+            const existingIndex = datasets.findIndex(x => x.id == id);
+            if (existingIndex < 0) {
+                datasets.push(dataset);
+            } else {
+                datasets[existingIndex].data = dataset.data;
+                delete datasets[existingIndex].toDelete;
+            }
+            maxLength = Math.max(maxLength, dataset.data.length);
         }
+    }
+
+    // Delete every dataset we didn't touch
+    for (let i = datasets.length - 1; i >= 0; --i) {
+        const dataset = datasets[i];
+        if (dataset.toDelete) {
+            datasets.splice(i, 1);
+        }
+    }
+
+    if (_alignment == "date") {
+        _coronaChart.data.labels = _dates;
+    } else {
+        _coronaChart.data.labels = Array.from(Array(maxLength).entries()).map(x => x[0]); // 1 to maxLength
     }
     _coronaChart.update();
 }
@@ -222,6 +256,7 @@ function CreateChartWhenDataReady() {
     CreateChart();
     ChartScaleUpdated();
     CaseKindUpdated();
+    AlignmentUpdated();
 
     $('#country-select').selectpicker('val', _selectedCountries);
     UpdateChartData();
@@ -233,6 +268,7 @@ function PopulateDefaultsFromURL() {
     _selectedCountries = (searchParams.get("locales") || "World").split(",");
     _selectedCaseKinds = (searchParams.get("casekinds") || "Confirmed").split(",");
     _logScale = searchParams.get("scale") == "log";
+    _alignment = searchParams.get("alignment");
 }
 
 function UpdateURL() {
@@ -242,6 +278,7 @@ function UpdateURL() {
     searchParams.set("locales", _selectedCountries.join(","));
     searchParams.set("casekinds", _selectedCaseKinds.join(","));
     searchParams.set("scale", _logScale ? "log" : "linear");
+    searchParams.set("alignment", _alignment);
     window.history.replaceState({}, document.title, url.toString());
 }
 
@@ -274,6 +311,16 @@ function CaseKindUpdated() {
     UpdateURL();
 }
 
+function AlignmentUpdated() {
+    const alignment = $("#date").prop("checked") ? "date" : "since100";
+    if (_alignment != alignment) {
+        ClearChartData();
+    }
+    _alignment = alignment;
+    UpdateChartData();
+    UpdateURL();
+}
+
 $(document).ready(function() {
     PopulateDefaultsFromURL();
 
@@ -300,6 +347,7 @@ $(document).ready(function() {
 
     $("#scale").change(ChartScaleUpdated);
     $("#caseKind").change(CaseKindUpdated);
+    $("#alignment").change(AlignmentUpdated);
 
     Papa.parse("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Confirmed.csv", 
         {
