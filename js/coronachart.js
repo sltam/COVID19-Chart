@@ -150,7 +150,6 @@ function CreatePercentageDataset(label, data, color) {
 }
 
 function SetCDRGraph(countryName) {
-    console.log(_confirmedPerCountry[countryName]);
     _coronaChart.data.datasets = [
         CreatePeopleDataset('Confirmed', _confirmedPerCountry[countryName], 'rgba(40, 40, 255, 0.3)'),
         CreatePeopleDataset('Deaths', _deathsPerCountry[countryName], 'rgba(255, 0, 0, 0.3)'),
@@ -274,14 +273,8 @@ $(document).ready(function() {
         }
     });
 
-    $('#logarithmic-toggle').bootstrapToggle({
-        on: 'Logarithmic',
-        off: 'Linear',
-        offstyle: 'info'
-    });
-
-    $('#logarithmic-toggle').change(function() {
-        if ($('#logarithmic-toggle').prop('checked')) {
+    $('#scale').change(function() {
+        if ($('#logarithmic').prop('checked')) {
             _coronaChart.options.scales.yAxes[0].type = 'logarithmic';
         } else {
             _coronaChart.options.scales.yAxes[0].type = 'linear';
@@ -294,7 +287,6 @@ $(document).ready(function() {
             download: true,
             dynamicTyping: true,
             complete: function(results) {
-                console.log("Retrieved confirmed cases");
                 const data = results.data;
                 StoreLabels(data);
                 StoreCountries(data);
@@ -311,7 +303,6 @@ $(document).ready(function() {
             download: true,
             dynamicTyping: true,
             complete: function(results) {
-                console.log("Retrieved deaths");
                 StoreDeathsPerCountry(results.data);
                 _dataReceived++;
                 CheckStartCountry();
@@ -324,7 +315,6 @@ $(document).ready(function() {
             download: true,
             dynamicTyping: true,
             complete: function(results) {
-                console.log("Retrieved recovered");
                 StoreRecoveredPerCountry(results.data);
                 _dataReceived++;
                 CheckStartCountry();
