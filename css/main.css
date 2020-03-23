@@ -10,3 +10,8 @@
     width:auto;
     padding: 0% 10% 0% 10%;
 }
+
+.btn-outline-secondary:hover {
+    color: inherit;
+    background-color: inherit;
+}

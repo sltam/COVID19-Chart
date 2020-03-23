@@ -1,11 +1,31 @@
-var _coronaChart = {};
+var _coronaChart = null;
 var _confirmedPerCountry = {};
 var _deathsPerCountry = {};
 var _recoveredPerCountry = {};
 var _increasePerCountry = {};
+const casesPerCountryForCaseKind = {
+    Confirmed: _confirmedPerCountry,
+    Deaths: _deathsPerCountry,
+    Recovered: _recoveredPerCountry,
+    Increase: _increasePerCountry,
+};
+const functionForCaseKind = {
+    Confirmed: CreatePeopleDataset,
+    Deaths: CreatePeopleDataset,
+    Recovered: CreatePeopleDataset,
+    Increase: CreatePercentageDataset,
+};
+const colorForCaseKind = {
+    Confirmed: "hsl(%d, 70%, 70%)",
+    Deaths: "hsl(%d, 70%, 30%)",
+    Recovered: "hsl(%d, 30%, 70%)",
+    Increase: "hsl(%d, 50%, 50%)",
+};
+var _logScale = false;
 var _countries = [];
-var _labels = [];
-var _colors = ['rgba(255, 99, 132, 0.3)', 'rgba(132, 99, 255, 0.3)', 'rgba(132, 255, 99, 0.3)', 'rgba(255, 132, 99, 0.3)', 'rgba(255, 99, 132, 0.3)']
+var _selectedCountries = [];
+var _selectedCaseKinds = [];
+var _dates = [];
 var _dataReceived = 0;
 
 function StoreDataInObject(object, csvData) {
@@ -22,10 +42,6 @@ function StoreDataInObject(object, csvData) {
         }
     }
 
-}
-
-function StoreLabels(csvData) {
-    _labels = csvData[0].slice(4);
 }
 
 function StoreCountries(csvData) {
@@ -67,23 +83,18 @@ function CalculateWorldData() {
 }
 
 function StoreConfirmedPerCountry(csvData) {
-    _confirmedPerCountry = {};
     StoreDataInObject(_confirmedPerCountry, csvData);
 }
 
 function StoreDeathsPerCountry(csvData) {
-    _deathsPerCountry = {};
     StoreDataInObject(_deathsPerCountry, csvData);
 }
 
 function StoreRecoveredPerCountry(csvData) {
-    _recoveredPerCountry = {};
     StoreDataInObject(_recoveredPerCountry, csvData);
 }
 
 function CalculateIncrease() {
-    _increasePerCountry = {};
-
     for (let index = 0; index < _countries.length; index++) {
         const country = _countries[index];
         const confirmed = _confirmedPerCountry[country];
@@ -101,7 +112,7 @@ function CalculateIncrease() {
     }
 }
 
-function UpdateCountrySelect(_countries) {
+function AddCountriesToSelectPicker(_countries) {
     let select = $("#country-select");
     select.contents().remove();
 
@@ -117,21 +128,14 @@ function GetChartDataForCountry(countryName) {
     return _confirmedPerCountry[countryName];
 }
 
-function UpdateChartColors() {
-    for (let index = 0; index < _coronaChart.data.datasets.length; index++) {
-        const element = _coronaChart.data.datasets[index];
-        element.backgroundColor = _colors[index];
-    }
-    _coronaChart.update();
-}
-
 function CreatePeopleDataset(label, data, color) {
     return {
         label: label,
         data: data,
         borderWidth: 1,
+        fill: false,
         lineTension: 0,
-        backgroundColor: color,
+        borderColor: color,
         yAxisID: 'left-y-axis'
     }
 }
@@ -140,55 +144,37 @@ function CreatePercentageDataset(label, data, color) {
     return {
         label: label,
         data: data,
-        borderWidth: 2,
+        borderWidth: 1,
         fill: false,
         lineTension: 0,
         borderColor: color,
-        hidden: true,
         yAxisID: 'right-y-axis'
     }
 }
 
-function SetCDRGraph(countryName) {
-    _coronaChart.data.datasets = [
-        CreatePeopleDataset('Confirmed', _confirmedPerCountry[countryName], 'rgba(40, 40, 255, 0.3)'),
-        CreatePeopleDataset('Deaths', _deathsPerCountry[countryName], 'rgba(255, 0, 0, 0.3)'),
-        CreatePeopleDataset('Recovered', _recoveredPerCountry[countryName], 'rgba(0, 255, 0, 0.3)'),
-        CreatePercentageDataset('Increase in %', _increasePerCountry[countryName], 'rgb(42, 128, 42)')
-    ];
+function UpdateChartData() {
+    const datasets = _coronaChart.data.datasets;
+    datasets.splice(0, datasets.length);
+    for (const caseKind of _selectedCaseKinds) {
+        for (const [countryIndex, countryName] of _selectedCountries.entries()) {
+            const suffix = _selectedCaseKinds.length == 1 ? "" : `-${caseKind}`;
+            const cases = casesPerCountryForCaseKind[caseKind][countryName];
+            const color = colorForCaseKind[caseKind].replace("%d", countryIndex * 360 / _selectedCountries.length);
+            const dataset = functionForCaseKind[caseKind](`${countryName}${suffix}`, cases, color);
+            datasets.push(dataset);
+        }
+    }
     _coronaChart.update();
 }
 
-function AddCountryData(countryName) {
-    _coronaChart.data.datasets.push({
-        label: countryName,
-        data: _confirmedPerCountry[countryName],
-        borderWidth: 1
-    });
-
-    UpdateChartColors();
-}
-
-function RemoveCountryData(countryName) {
-    let datasets = _coronaChart.data.datasets;
-    for (let index = datasets.length - 1; index >= 0; index--) {
-        const element = datasets[index];
-        if (element.label == countryName) {
-            _coronaChart.data.datasets.splice(index, 1);
-            break;
-        }
-    }
-    UpdateChartColors();
-}
-
-function CreateChart(labels) {
+function CreateChart() {
     let ctx = document.getElementById('coronaChart');
 
     _coronaChart = new Chart(ctx, {
         type: 'line',
         fill: true,
         data: {
-            labels: labels,
+            labels: _dates,
             datasets: [] 
         },
         options: {
@@ -224,63 +210,96 @@ function CreateChart(labels) {
     });
 }
 
-function GetCountryFromGET() {
-    const url = new URL(window.location);
-    return url.searchParams.get("country");
-}
-
-function CheckStartCountry() {
+function CreateChartWhenDataReady() {
     if (_dataReceived < 3) {
         return;
     }
 
     CalculateWorldData();
     CalculateIncrease();
-    UpdateCountrySelect(_countries);
+    AddCountriesToSelectPicker(_countries);
 
-    let country = GetCountryFromGET();
+    CreateChart();
+    ChartScaleUpdated();
+    CaseKindUpdated();
 
-    if (!country) {
-        country = 'World';
-    }
-
-    $('#country-select').selectpicker('val', country);
-    SetCDRGraph(country);
+    $('#country-select').selectpicker('val', _selectedCountries);
+    UpdateChartData();
 }
 
-function UpdateURL(country) {
-    let url = window.location.href.split('?')[0];
-    window.history.replaceState({}, document.title, url + "?country=" + country);
+function PopulateDefaultsFromURL() {
+    const url = new URL(window.location);
+    const searchParams = url.searchParams;
+    _selectedCountries = (searchParams.get("locales") || "World").split(",");
+    _selectedCaseKinds = (searchParams.get("casekinds") || "Confirmed").split(",");
+    _logScale = searchParams.get("scale") == "log";
+}
+
+function UpdateURL() {
+    const url = new URL(window.location);
+    url.search = "";
+    const searchParams = url.searchParams;
+    searchParams.set("locales", _selectedCountries.join(","));
+    searchParams.set("casekinds", _selectedCaseKinds.join(","));
+    searchParams.set("scale", _logScale ? "log" : "linear");
+    window.history.replaceState({}, document.title, url.toString());
+}
+
+function ChartScaleUpdated() {
+    _logScale = $("#logarithmic").prop("checked")
+    if (_logScale) {
+        _coronaChart.options.scales.yAxes[0].type = "logarithmic";
+    } else {
+        _coronaChart.options.scales.yAxes[0].type = "linear";
+    }
+    _coronaChart.update();
+    UpdateURL();
+}
+
+function CaseKindUpdated() {
+    _selectedCaseKinds.splice(0, _selectedCaseKinds.length);
+    if ($("#confirmed").prop("checked")) {
+        _selectedCaseKinds.push("Confirmed");
+    }
+    if ($("#deaths").prop("checked")) {
+        _selectedCaseKinds.push("Deaths");
+    }
+    if ($("#recovered").prop("checked")) {
+        _selectedCaseKinds.push("Recovered");
+    }
+    if ($("#increase").prop("checked")) {
+        _selectedCaseKinds.push("Increase");
+    }
+    UpdateChartData();
+    UpdateURL();
 }
 
 $(document).ready(function() {
+    PopulateDefaultsFromURL();
+
     $('#country-select').selectpicker();
     $('#country-select').on('changed.bs.select', function(e, clickedIndex, isSelected, previousValue) {
+        if (clickedIndex === null) return;
         let multiselect = $('#country-select')[0].hasAttribute('multiple');
         let index = multiselect ? clickedIndex : clickedIndex - 1;
         let country = _countries[index];
 
-        if (isSelected) {
-            if (!multiselect) {
-                // RemoveCountryData(previousValue);
+        if (multiselect) {
+            const existingIndex = _selectedCountries.indexOf(country);
+            if (existingIndex < 0) {
+                _selectedCountries.push(country);
+            } else {
+                _selectedCountries.splice(existingIndex, 1);
             }
-
-            UpdateURL(country);
-            SetCDRGraph(country);
-            // AddCountryData(country);
         } else {
-            // RemoveCountryData(country);
+            _selectedCountries = [country];
         }
+        UpdateURL();
+        UpdateChartData();
     });
 
-    $('#scale').change(function() {
-        if ($('#logarithmic').prop('checked')) {
-            _coronaChart.options.scales.yAxes[0].type = 'logarithmic';
-        } else {
-            _coronaChart.options.scales.yAxes[0].type = 'linear';
-        }
-        _coronaChart.update();
-    });
+    $("#scale").change(ChartScaleUpdated);
+    $("#caseKind").change(CaseKindUpdated);
 
     Papa.parse("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Confirmed.csv", 
         {
@@ -288,12 +307,11 @@ $(document).ready(function() {
             dynamicTyping: true,
             complete: function(results) {
                 const data = results.data;
-                StoreLabels(data);
+                _dates = data[0].slice(4); // All available dates
                 StoreCountries(data);
                 StoreConfirmedPerCountry(data);
-                CreateChart(_labels);
                 _dataReceived++;
-                CheckStartCountry();
+                CreateChartWhenDataReady();
             }
         }
     );
@@ -305,7 +323,7 @@ $(document).ready(function() {
             complete: function(results) {
                 StoreDeathsPerCountry(results.data);
                 _dataReceived++;
-                CheckStartCountry();
+                CreateChartWhenDataReady();
             }
         }
     );
@@ -317,7 +335,7 @@ $(document).ready(function() {
             complete: function(results) {
                 StoreRecoveredPerCountry(results.data);
                 _dataReceived++;
-                CheckStartCountry();
+                CreateChartWhenDataReady();
             }
         }
     );

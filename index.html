@@ -19,15 +19,32 @@
     <body>
         <header class="navbar">
             <a class="navbar-brand" href="#">COVID-19 Chart</a>
-            <div id="scale" class="btn-group btn-group-toggle" data-toggle="buttons" aria-label="Scale">
-                <label class="btn btn-outline-secondary active">
-                    <input type="radio" name="scale" id="linear" checked>Linear</button>
+            <div id="scale" class="btn-group btn-group-toggle" data-toggle="buttons" aria-label="Y-Axis Scale">
+                <label class="btn btn-outline-secondary">
+                    <input name="scale" type="radio" id="linear">Linear</button>
                 </label>
                 <label class="btn btn-outline-secondary">
-                    <input type="radio" name="scale" id="logarithmic">Logarithmic</button>
+                    <input name="scale" type="radio" id="logarithmic">Logarithmic</button>
                 </label>
             </div>
-            <select id="country-select" class="selectpicker" data-live-search="true" title="Choose Country..." data-max-options="5">
+            <div id="caseKind" class="btn-group btn-group-toggle" data-toggle="buttons" aria-label="Case Kind">
+                <label class="btn btn-outline-secondary">
+                    <input name="caseKind" type="checkbox" id="confirmed">Confirmed</input>
+                </label>
+                <label class="btn btn-outline-secondary">
+                    <input name="caseKind" type="checkbox" id="deaths">Deaths</input>
+                </label>
+                <label class="btn btn-outline-secondary">
+                    <input name="caseKind" type="checkbox" id="recovered">Recovered</input>
+                </label>
+                <label class="btn btn-outline-secondary">
+                    <input name="caseKind" type="checkbox" id="increase">Increase %</input>
+                </label>
+            </div>
+            <select id="country-select" class="selectpicker show-tick"
+                data-live-search="true" title="Choose Country..."
+                data-max-options="5" multiple
+                data-width="350px">
 
             </select>
         </header>
