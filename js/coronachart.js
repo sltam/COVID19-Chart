@@ -1,24 +1,20 @@
 var _coronaChart = null;
 var _confirmedPerCountry = {};
 var _deathsPerCountry = {};
-var _recoveredPerCountry = {};
 var _increasePerCountry = {};
 const casesPerCountryForCaseKind = {
     Confirmed: _confirmedPerCountry,
     Deaths: _deathsPerCountry,
-    Recovered: _recoveredPerCountry,
     Increase: _increasePerCountry,
 };
 const functionForCaseKind = {
     Confirmed: CreatePeopleDataset,
     Deaths: CreatePeopleDataset,
-    Recovered: CreatePeopleDataset,
     Increase: CreatePercentageDataset,
 };
 const colorForCaseKind = {
     Confirmed: "hsl(%d, 70%, 70%)",
     Deaths: "hsl(%d, 70%, 30%)",
-    Recovered: "hsl(%d, 30%, 70%)",
     Increase: "hsl(%d, 50%, 50%)",
 };
 var _logScale = false;
@@ -63,7 +59,6 @@ function StoreCountries(csvData) {
 function CalculateWorldData() {
     _confirmedPerCountry['World'] = [];
     _deathsPerCountry['World'] = [];
-    _recoveredPerCountry['World'] = [];
     
     for (let index = 0; index < _countries.length; index++) {
         const country = _countries[index];
@@ -71,11 +66,9 @@ function CalculateWorldData() {
             if (dayIndex in _confirmedPerCountry['World']) {
                 _confirmedPerCountry['World'][dayIndex] += _confirmedPerCountry[country][dayIndex];
                 _deathsPerCountry['World'][dayIndex] += _deathsPerCountry[country][dayIndex]; 
-                _recoveredPerCountry['World'][dayIndex] += _recoveredPerCountry[country][dayIndex];
             } else {
                 _confirmedPerCountry['World'][dayIndex] = _confirmedPerCountry[country][dayIndex];
                 _deathsPerCountry['World'][dayIndex] = _deathsPerCountry[country][dayIndex]; 
-                _recoveredPerCountry['World'][dayIndex] = _recoveredPerCountry[country][dayIndex];
             }
         }
     }
@@ -89,10 +82,6 @@ function StoreConfirmedPerCountry(csvData) {
 
 function StoreDeathsPerCountry(csvData) {
     StoreDataInObject(_deathsPerCountry, csvData);
-}
-
-function StoreRecoveredPerCountry(csvData) {
-    StoreDataInObject(_recoveredPerCountry, csvData);
 }
 
 function CalculateIncrease() {
@@ -245,7 +234,7 @@ function CreateChart() {
 }
 
 function CreateChartWhenDataReady() {
-    if (_dataReceived < 3) {
+    if (_dataReceived < 2) {
         return;
     }
 
@@ -282,7 +271,6 @@ function PopulateDefaultsFromURL() {
     UpdateButton($("#linear"), !_logScale);
     UpdateButton($("#confirmed"), _selectedCaseKinds.includes("Confirmed"));
     UpdateButton($("#deaths"), _selectedCaseKinds.includes("Deaths"));
-    UpdateButton($("#recovered"), _selectedCaseKinds.includes("Recovered"));
     UpdateButton($("#increase"), _selectedCaseKinds.includes("Increase"));
     UpdateButton($("#date"), _alignment == "date");
     UpdateButton($("#since100"), _alignment == "since100");
@@ -317,9 +305,6 @@ function CaseKindUpdated() {
     }
     if ($("#deaths").prop("checked")) {
         _selectedCaseKinds.push("Deaths");
-    }
-    if ($("#recovered").prop("checked")) {
-        _selectedCaseKinds.push("Recovered");
     }
     if ($("#increase").prop("checked")) {
         _selectedCaseKinds.push("Increase");
@@ -366,7 +351,7 @@ $(document).ready(function() {
     $("#caseKind").change(CaseKindUpdated);
     $("#alignment").change(AlignmentUpdated);
 
-    Papa.parse("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Confirmed.csv", 
+    Papa.parse("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv", 
         {
             download: true,
             dynamicTyping: true,
@@ -381,24 +366,12 @@ $(document).ready(function() {
         }
     );
 
-    Papa.parse("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Deaths.csv", 
+    Papa.parse("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv", 
         {
             download: true,
             dynamicTyping: true,
             complete: function(results) {
                 StoreDeathsPerCountry(results.data);
-                _dataReceived++;
-                CreateChartWhenDataReady();
-            }
-        }
-    );
-
-    Papa.parse("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Recovered.csv", 
-        {
-            download: true,
-            dynamicTyping: true,
-            complete: function(results) {
-                StoreRecoveredPerCountry(results.data);
                 _dataReceived++;
                 CreateChartWhenDataReady();
             }
