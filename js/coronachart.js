@@ -152,6 +152,7 @@ function UpdateChartData() {
     datasets.forEach(dataset => datasetByID[dataset.id] = dataset);
     datasets.splice(0, datasets.length);
     let maxLength = 0;
+    let maxValue = 0;
     let shift = 0; // Number of initial entries to drop
     if (_alignment == "last28") {
         shift = _dates.length - 28;
@@ -179,6 +180,7 @@ function UpdateChartData() {
                 datasets.push(dataset);
             }
             maxLength = Math.max(maxLength, dataset.data.length);
+            maxValue = Math.max(maxValue, Math.max(...dataset.data));
         }
     }
 
@@ -189,6 +191,7 @@ function UpdateChartData() {
     } else {
         _coronaChart.data.labels = Array.from(Array(maxLength).entries()).map(x => x[0]); // 1 to maxLength
     }
+    _coronaChart.options.scales.yAxes[0].ticks.max = _logScale ? Math.pow(10, Math.ceil(Math.log10(maxValue))) : undefined;
     _coronaChart.options.scales.yAxes[1].display = _selectedCaseKinds.includes("Increase");
     _coronaChart.update();
 }
@@ -303,7 +306,7 @@ function ChartScaleUpdated() {
     } else {
         _coronaChart.options.scales.yAxes[0].type = "linear";
     }
-    _coronaChart.update();
+    UpdateChartData();
     UpdateURL();
 }
 
