@@ -18,7 +18,7 @@
     </head>
     <body>
         <header class="navbar">
-            <a class="navbar-brand" href="#">COVID-19 Chart</a>
+            <div class="navbar-brand">COVID-19 Chart</div>
             <div id="scale" class="btn-group btn-group-toggle" data-toggle="buttons" aria-label="Y-Axis Scale">
                 <label class="btn btn-outline-secondary">
                     <input name="scale" type="radio" id="linear">Linear</button>
@@ -38,6 +38,7 @@
                     <input name="caseKind" type="checkbox" id="increase">Increase %</input>
                 </label>
             </div>
+
             <div id="alignment" class="btn-group btn-group-toggle" data-toggle="buttons" aria-label="Case Kind">
                 <label class="btn btn-outline-secondary" title="All data aligned by date">
                     <input name="alignment" type="radio" id="date">All</input>
@@ -45,15 +46,19 @@
                 <label class="btn btn-outline-secondary" title="Last 28 days of data aligned by date">
                     <input name="alignment" type="radio" id="last28">Last 28</input>
                 </label>
-                <label class="btn btn-outline-secondary" title="Days since ≥100 confirmed cases">
+                <label class="btn btn-outline-secondary" title="Days since ≥100 confirmed cases per country">
                     <input name="alignment" type="radio" id="since100">Since 100</input>
                 </label>
+            </div>
+
+            <div id="alignment" class="btn-group" aria-label="Case Kind">
+                <button class="btn btn-outline-secondary" id="top10" label="10 countries with most cases">Top 10</button>
+                <button class="btn btn-outline-secondary" id="top25" label="25 countries with most cases">Top 25</button>
             </div>
             <select id="country-select" class="selectpicker show-tick"
                 data-live-search="true" title="Choose Country..."
                 data-max-options="20" multiple
-                data-width="350px">
-
+                data-width="320px">
             </select>
         </header>
 

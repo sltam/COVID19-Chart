@@ -335,6 +335,16 @@ function AlignmentUpdated() {
     UpdateURL();
 }
 
+function SelectTopCountries(count) {
+    const all = Object.entries(_confirmedPerCountry);
+    const real = all.filter(x => x[0] != "World" && typeof x[1][0] === "number");
+    const maxPerCountry = real.filter(x => x[0] != "World").map(x => [x[0], Math.max(...x[1])]);
+    maxPerCountry.sort((a, b) => b[1] - a[1]);
+    _selectedCountries = maxPerCountry.slice(0, count).map(x => x[0]);
+    $('#country-select').selectpicker('val', _selectedCountries);
+    UpdateChartData();
+}
+
 $(document).ready(function() {
     $('#country-select').selectpicker();
     $('#country-select').on('changed.bs.select', function(e, clickedIndex, isSelected, previousValue) {
@@ -360,6 +370,8 @@ $(document).ready(function() {
     $("#scale").change(ChartScaleUpdated);
     $("#caseKind").change(CaseKindUpdated);
     $("#alignment").change(AlignmentUpdated);
+    $("#top10").click(() => SelectTopCountries(10));
+    $("#top25").click(() => SelectTopCountries(25));
 
     Papa.parse("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv", 
         {
