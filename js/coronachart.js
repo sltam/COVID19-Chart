@@ -148,7 +148,9 @@ function ClearChartData() {
 
 function UpdateChartData() {
     const datasets = _coronaChart.data.datasets;
-    datasets.map(dataset => dataset.toDelete = true);
+    const datasetByID = {};
+    datasets.forEach(dataset => datasetByID[dataset.id] = dataset);
+    datasets.splice(0, datasets.length);
     let maxLength = 0;
     let shift = 0; // Number of initial entries to drop
     if (_alignment == "last28") {
@@ -166,24 +168,17 @@ function UpdateChartData() {
             const dataset = functionForCaseKind[caseKind](`${countryName}${suffix}`, cases, color);
             dataset.id = id;
             dataset.data = dataset.data.slice(shift);
-            const existingIndex = datasets.findIndex(x => x.id == id);
-            if (existingIndex < 0) {
-                datasets.push(dataset);
-            } else {
+            const existingDataSet = datasetByID[id];
+            if (existingDataSet) {
                 for (const prop in dataset) {
-                    datasets[existingIndex][prop] = dataset[prop];
+                    existingDataSet[prop] = dataset[prop];
                 }
-                delete datasets[existingIndex].toDelete;
+                datasets.push(existingDataSet);
+                delete datasetByID[id];
+            } else {
+                datasets.push(dataset);
             }
             maxLength = Math.max(maxLength, dataset.data.length);
-        }
-    }
-
-    // Delete every dataset we didn't touch
-    for (let i = datasets.length - 1; i >= 0; --i) {
-        const dataset = datasets[i];
-        if (dataset.toDelete) {
-            datasets.splice(i, 1);
         }
     }
 
