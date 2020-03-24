@@ -6,7 +6,17 @@ html, body {
 
 #coronaChart {
     width: 100%;
-    height: 100%;
+    top: 0px;
+    bottom: 0px;
+}
+
+#source {
+    color: gray;
+    padding: 20px 5% 0 5%;
+    text-align: center;
+}
+#source a {
+    color: inherit;
 }
 
 .btn-outline-secondary:hover {
