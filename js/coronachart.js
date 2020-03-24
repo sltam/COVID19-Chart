@@ -13,9 +13,9 @@ const functionForCaseKind = {
     Increase: CreatePercentageDataset,
 };
 const colorForCaseKind = {
-    Confirmed: "hsl(%d, 70%, 70%)",
-    Deaths: "hsl(%d, 70%, 30%)",
-    Increase: "hsl(%d, 50%, 50%)",
+    Confirmed: "hsl(%d, 70%, 70%, 0.7)",
+    Deaths: "hsl(%d, 70%, 30%, 0.5)",
+    Increase: "hsl(%d, 30%, 70%, 1.0)",
 };
 var _logScale = false;
 var _alignment = "date";
@@ -150,8 +150,11 @@ function UpdateChartData() {
     const datasets = _coronaChart.data.datasets;
     datasets.map(dataset => dataset.toDelete = true);
     let maxLength = 0;
+    let shift = 0; // Number of initial entries to drop
+    if (_alignment == "last28") {
+        shift = _dates.length - 28;
+    }
     for (const [countryIndex, countryName] of _selectedCountries.entries()) {
-        let shift = 0; // Number of initial entries to drop
         if (_alignment == "since100") {
             shift = _confirmedPerCountry[countryName].filter(x => x < 100).length;
         }
@@ -186,6 +189,8 @@ function UpdateChartData() {
 
     if (_alignment == "date") {
         _coronaChart.data.labels = _dates;
+    } else if (_alignment == "last28") {
+        _coronaChart.data.labels = _dates.slice(shift);
     } else {
         _coronaChart.data.labels = Array.from(Array(maxLength).entries()).map(x => x[0]); // 1 to maxLength
     }
@@ -281,6 +286,7 @@ function PopulateDefaultsFromURL() {
     UpdateButton($("#deaths"), _selectedCaseKinds.includes("Deaths"));
     UpdateButton($("#increase"), _selectedCaseKinds.includes("Increase"));
     UpdateButton($("#date"), _alignment == "date");
+    UpdateButton($("#last28"), _alignment == "last28");
     UpdateButton($("#since100"), _alignment == "since100");
 }
 
@@ -322,7 +328,7 @@ function CaseKindUpdated() {
 }
 
 function AlignmentUpdated() {
-    const alignment = $("#date").prop("checked") ? "date" : "since100";
+    const alignment = $("#date").prop("checked") ? "date" : $("#last28").prop("checked") ? "last28" : "since100";
     if (_alignment != alignment) {
         ClearChartData();
     }
