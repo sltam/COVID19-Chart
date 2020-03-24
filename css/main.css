@@ -1,14 +1,12 @@
-.container {
-    margin-top: 1rem;
-    margin-left: 10%;
-    margin-bottom: 1rem;
+html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
 }
 
-.chart-container {
-    position: relative;
-    height:auto;
-    width:auto;
-    padding: 0% 10% 0% 10%;
+#coronaChart {
+    width: 100%;
+    height: 100%;
 }
 
 .btn-outline-secondary:hover {

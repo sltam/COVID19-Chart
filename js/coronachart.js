@@ -189,47 +189,52 @@ function UpdateChartData() {
     } else {
         _coronaChart.data.labels = Array.from(Array(maxLength).entries()).map(x => x[0]); // 1 to maxLength
     }
+    _coronaChart.options.scales.yAxes[1].display = _selectedCaseKinds.includes("Increase");
     _coronaChart.update();
 }
 
 function CreateChart() {
-    let ctx = document.getElementById('coronaChart');
+    let ctx = document.getElementById("coronaChart");
 
     _coronaChart = new Chart(ctx, {
-        type: 'line',
-        fill: true,
+        type: "line",
+        fill: false,
         data: {
             labels: _dates,
-            datasets: [] 
+            datasets: [],
         },
         options: {
+            legend: {
+                position: "right",
+            },
             scales: {
                 yAxes: [
-                {
-                    id: 'left-y-axis',
-                    scaleLabel: {
-                        display: true,
-                        labelString: '# of people'
+                    {
+                        id: "left-y-axis",
+                        scaleLabel: {
+                            display: true,
+                            labelString: "# of people",
+                        },
+                        ticks: {
+                            beginAtZero: true,
+                            maxTicksLimit: 12,
+                        },
+                        type: "linear",
+                        position: "left",
                     },
-                    ticks: {
-                        beginAtZero: true
-                    },
-                    type: 'linear',
-                    position: 'left'
-                },
-                {
-                    id: 'right-y-axis',
-                    scaleLabel: {
-                        display: true,
-                        labelString: '%'
-                    },
-                    ticks: {
-                        min: 0
-                    },
-                    type: 'linear',
-                    position: 'right'
-                }
-            ]
+                    {
+                        id: "right-y-axis",
+                        scaleLabel: {
+                            display: true,
+                            labelString: "%increase",
+                        },
+                        ticks: {
+                            min: 0,
+                        },
+                        type: "linear",
+                        position: "right",
+                    }
+                ]
             }
         }
     });
