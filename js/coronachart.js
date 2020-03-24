@@ -167,7 +167,9 @@ function UpdateChartData() {
             if (existingIndex < 0) {
                 datasets.push(dataset);
             } else {
-                datasets[existingIndex].data = dataset.data;
+                for (const prop in dataset) {
+                    datasets[existingIndex][prop] = dataset[prop];
+                }
                 delete datasets[existingIndex].toDelete;
             }
             maxLength = Math.max(maxLength, dataset.data.length);
