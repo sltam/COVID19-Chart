@@ -238,6 +238,7 @@ function CreateChartWhenDataReady() {
         return;
     }
 
+    PopulateDefaultsFromURL();
     CalculateWorldData();
     CalculateIncrease();
     AddCountriesToSelectPicker(_countries);
@@ -263,8 +264,8 @@ function UpdateButton(button, value) {
 function PopulateDefaultsFromURL() {
     const url = new URL(window.location);
     const searchParams = url.searchParams;
-    _selectedCountries = (searchParams.get("locales") || "World").split(",");
-    _selectedCaseKinds = (searchParams.get("casekinds") || "Confirmed").split(",");
+    _selectedCountries = (searchParams.get("locales") || "World").split("|").filter(x => _countries.includes(x));
+    _selectedCaseKinds = (searchParams.get("casekinds") || "Confirmed").split("|");
     _logScale = searchParams.get("scale") == "log";
     _alignment = searchParams.get("alignment");
     UpdateButton($("#logarithmic"), _logScale);
@@ -280,8 +281,8 @@ function UpdateURL() {
     const url = new URL(window.location);
     url.search = "";
     const searchParams = url.searchParams;
-    searchParams.set("locales", _selectedCountries.join(","));
-    searchParams.set("casekinds", _selectedCaseKinds.join(","));
+    searchParams.set("locales", _selectedCountries.join("|"));
+    searchParams.set("casekinds", _selectedCaseKinds.join("|"));
     searchParams.set("scale", _logScale ? "log" : "linear");
     searchParams.set("alignment", _alignment);
     window.history.replaceState({}, document.title, url.toString());
@@ -324,8 +325,6 @@ function AlignmentUpdated() {
 }
 
 $(document).ready(function() {
-    PopulateDefaultsFromURL();
-
     $('#country-select').selectpicker();
     $('#country-select').on('changed.bs.select', function(e, clickedIndex, isSelected, previousValue) {
         if (clickedIndex === null) return;
