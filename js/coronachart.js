@@ -262,6 +262,15 @@ function CreateChartWhenDataReady() {
     UpdateChartData();
 }
 
+function UpdateButton(button, value) {
+    button.prop("checked", value);
+    if (value) {
+        button.parent().addClass("active");
+    } else {
+        button.parent().removeClass("active");
+    }
+}
+
 function PopulateDefaultsFromURL() {
     const url = new URL(window.location);
     const searchParams = url.searchParams;
@@ -269,6 +278,14 @@ function PopulateDefaultsFromURL() {
     _selectedCaseKinds = (searchParams.get("casekinds") || "Confirmed").split(",");
     _logScale = searchParams.get("scale") == "log";
     _alignment = searchParams.get("alignment");
+    UpdateButton($("#logarithmic"), _logScale);
+    UpdateButton($("#linear"), !_logScale);
+    UpdateButton($("#confirmed"), _selectedCaseKinds.includes("Confirmed"));
+    UpdateButton($("#deaths"), _selectedCaseKinds.includes("Deaths"));
+    UpdateButton($("#recovered"), _selectedCaseKinds.includes("Recovered"));
+    UpdateButton($("#increase"), _selectedCaseKinds.includes("Increase"));
+    UpdateButton($("#date"), _alignment == "date");
+    UpdateButton($("#since100"), _alignment == "since100");
 }
 
 function UpdateURL() {
