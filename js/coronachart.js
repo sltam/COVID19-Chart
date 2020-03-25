@@ -1,121 +1,76 @@
-var _coronaChart = null;
-var _confirmedPerCountry = {};
-var _deathsPerCountry = {};
-var _increasePerCountry = {};
-const casesPerCountryForCaseKind = {
-    Confirmed: _confirmedPerCountry,
-    Deaths: _deathsPerCountry,
-    Increase: _increasePerCountry,
-};
-const functionForCaseKind = {
-    Confirmed: CreatePeopleDataset,
-    Deaths: CreatePeopleDataset,
-    Increase: CreatePercentageDataset,
-};
-const colorForCaseKind = {
-    Confirmed: "hsl(%d, 70%, 70%, 0.7)",
-    Deaths: "hsl(%d, 70%, 30%, 0.5)",
-    Increase: "hsl(%d, 30%, 70%, 1.0)",
-};
-var _logScale = false;
-var _alignment = "date";
-var _countries = [];
-var _selectedCountries = [];
-var _selectedCaseKinds = [];
-var _dates = [];
-var _dataReceived = 0;
+// Data
+const WORLD = "World";
+const $localeData = {}; // $localeData[localeName][date][key]
+const $countries = { [WORLD]: [] };
+let _coronaChart = null;
+let $dates;
+let $requestsPending = 0;
 
-function StoreDataInObject(object, csvData) {
-    for (let index = 0; index < csvData.length; index++) {
-        const element = csvData[index];
-        const name = element[1];
+// Properties
+let _logScale;
+let _alignment;
+let _selectedCountries;
+let _selectedCaseKinds;
 
-        if (name in object) {
-            for (let i = 0; i < object[name].length; i++) {
-                object[name][i] += element[4 + i];
-            }
-        } else {
-            object[name] = element.slice(4);
-        }
+
+function StoreDatesAndCountries(csvData) {
+    const header = csvData.shift();
+    $dates = header.slice(4); // All available dates
+    const rows = csvData;
+    const countries = rows.map(x => x[1]);
+    for (const country of countries) {
+        $countries[country] = {};
     }
-
 }
 
-function StoreCountries(csvData) {
-    _countries = [];
-    let checkDups = {};
-
-    for (let index = 1; index < csvData.length; index++) {
-        const country = csvData[index][1];
-
-        if (!(country in checkDups)) {
-            _countries.push(country);
-            checkDups[country] = true;
+function StoreLocaleData(key, csvData) {
+    csvData = csvData.slice(1); // Drop header
+    for (const row of csvData.slice(1)) {
+        const [province, country, lat, long] = row;
+        $localeData[country] = $localeData[country] || [];
+        for (const [dayIndex, datum] of row.slice(4).entries()) {
+            $localeData[country][dayIndex] = $localeData[country][dayIndex] || { Confirmed: 0, Deaths: 0 };
+            $localeData[country][dayIndex][key] += datum;
         }
     }
-    _countries.sort();
 }
 
 function CalculateWorldData() {
-    _confirmedPerCountry['World'] = [];
-    _deathsPerCountry['World'] = [];
-    
-    for (let index = 0; index < _countries.length; index++) {
-        const country = _countries[index];
-        for (let dayIndex = 0; dayIndex < _confirmedPerCountry[country].length; dayIndex++) {
-            if (dayIndex in _confirmedPerCountry['World']) {
-                _confirmedPerCountry['World'][dayIndex] += _confirmedPerCountry[country][dayIndex];
-                _deathsPerCountry['World'][dayIndex] += _deathsPerCountry[country][dayIndex]; 
-            } else {
-                _confirmedPerCountry['World'][dayIndex] = _confirmedPerCountry[country][dayIndex];
-                _deathsPerCountry['World'][dayIndex] = _deathsPerCountry[country][dayIndex]; 
-            }
+    $localeData[WORLD] = [];
+    for (const dayIndex in $dates) {
+        let confirmed = 0, deaths = 0;
+        for (const country in $countries) {
+            // if (!$localeData[country])  console.info(`Missing $localeData[${country}]`);
+            const countryData = $localeData[country] || {};
+            confirmed += (countryData[dayIndex] || {}).Confirmed || 0;
+            deaths += (countryData[dayIndex] || {}).Deaths || 0;
         }
+        $localeData[WORLD][dayIndex] = { Confirmed: confirmed, Deaths: deaths };
     }
-
-    _countries.unshift('World');
-}
-
-function StoreConfirmedPerCountry(csvData) {
-    StoreDataInObject(_confirmedPerCountry, csvData);
-}
-
-function StoreDeathsPerCountry(csvData) {
-    StoreDataInObject(_deathsPerCountry, csvData);
 }
 
 function CalculateIncrease() {
-    for (let index = 0; index < _countries.length; index++) {
-        const country = _countries[index];
-        const confirmed = _confirmedPerCountry[country];
-        let last = confirmed[0];
-        _increasePerCountry[country] = [];
-        
-        for (let confirmedIndex = 1; confirmedIndex < confirmed.length; confirmedIndex++) {
-            const element = confirmed[confirmedIndex];
-
+    for (const country in $countries) {
+        const countryData = $localeData[country];
+        if (!countryData) continue;
+        let last = countryData[0].Confirmed;
+        for (const dayIndex in countryData) {
+            const current = countryData[dayIndex].Confirmed;
             if (last > 0) {
-                _increasePerCountry[country][confirmedIndex] = 100 * (element - last) / last;
+                countryData[dayIndex].Increase = 100 * (current - last) / last;
             }
-            last = element;
+            last = current;
         }
     }
 }
 
-function AddCountriesToSelectPicker(_countries) {
+function AddCountriesToSelectPicker($countries) {
     let select = $("#country-select");
     select.contents().remove();
-
-    for (let index = 0; index < _countries.length; index++) {
-        const element = _countries[index];
-        select.append("<option>" + element + "</option>");
+    for (const country in $countries) {
+        select.append("<option>" + country + "</option>");
     }
-
     select.selectpicker('refresh');
-}
-
-function GetChartDataForCountry(countryName) {
-    return _confirmedPerCountry[countryName];
 }
 
 function CreatePeopleDataset(label, data, color) {
@@ -147,6 +102,17 @@ function ClearChartData() {
 }
 
 function UpdateChartData() {
+    const functionForCaseKind = {
+        Confirmed: CreatePeopleDataset,
+        Deaths: CreatePeopleDataset,
+        Increase: CreatePercentageDataset,
+    };
+    const colorForCaseKind = {
+        Confirmed: "hsl(%d, 70%, 70%, 0.7)",
+        Deaths: "hsl(%d, 70%, 30%, 0.5)",
+        Increase: "hsl(%d, 30%, 70%, 1.0)",
+    };
+
     const datasets = _coronaChart.data.datasets;
     const datasetByID = {};
     datasets.forEach(dataset => datasetByID[dataset.id] = dataset);
@@ -155,18 +121,18 @@ function UpdateChartData() {
     let maxValue = 0;
     let shift = 0; // Number of initial entries to drop
     if (_alignment == "last28") {
-        shift = _dates.length - 28;
+        shift = $dates.length - 28;
     }
-    for (const [countryIndex, countryName] of _selectedCountries.entries()) {
+    for (const [countryIndex, country] of _selectedCountries.entries()) {
         if (_alignment == "since100") {
-            shift = _confirmedPerCountry[countryName].filter(x => x < 100).length;
+            shift = $localeData[country].filter(x => x.Confirmed < 100).length;
         }
         for (const caseKind of _selectedCaseKinds) {
-            const id = `${countryName}-${caseKind}`;
+            const id = `${country}-${caseKind}`;
             const suffix = _selectedCaseKinds.length == 1 ? "" : `-${caseKind}`;
-            const cases = casesPerCountryForCaseKind[caseKind][countryName];
+            const cases = ($localeData[country] || []).map(x => (x ? x[caseKind] : {}));
             const color = colorForCaseKind[caseKind].replace("%d", countryIndex * 360 / _selectedCountries.length);
-            const dataset = functionForCaseKind[caseKind](`${countryName}${suffix}`, cases, color);
+            const dataset = functionForCaseKind[caseKind](`${country}${suffix}`, cases, color);
             dataset.id = id;
             dataset.data = dataset.data.slice(shift);
             const existingDataSet = datasetByID[id];
@@ -185,9 +151,9 @@ function UpdateChartData() {
     }
 
     if (_alignment == "date") {
-        _coronaChart.data.labels = _dates;
+        _coronaChart.data.labels = $dates.map(s => s.split("/").slice(0, 2).join("/"));
     } else if (_alignment == "last28") {
-        _coronaChart.data.labels = _dates.slice(shift);
+        _coronaChart.data.labels = $dates.slice(shift);
     } else {
         _coronaChart.data.labels = Array.from(Array(maxLength).entries()).map(x => x[0]); // 1 to maxLength
     }
@@ -203,7 +169,7 @@ function CreateChart() {
         type: "line",
         fill: false,
         data: {
-            labels: _dates,
+            labels: [],
             datasets: [],
         },
         options: {
@@ -244,14 +210,14 @@ function CreateChart() {
 }
 
 function CreateChartWhenDataReady() {
-    if (_dataReceived < 2) {
+    if ($requestsPending > 0) {
         return;
     }
 
     PopulateDefaultsFromURL();
     CalculateWorldData();
     CalculateIncrease();
-    AddCountriesToSelectPicker(_countries);
+    AddCountriesToSelectPicker($countries);
 
     CreateChart();
     ChartScaleUpdated();
@@ -274,7 +240,7 @@ function UpdateButton(button, value) {
 function PopulateDefaultsFromURL() {
     const url = new URL(window.location);
     const searchParams = url.searchParams;
-    _selectedCountries = (searchParams.get("locales") || "World").split("|").filter(x => _countries.includes(x));
+    _selectedCountries = (searchParams.get("locales") || "World").split("|").filter(x => $countries[x]);
     _selectedCaseKinds = (searchParams.get("casekinds") || "Confirmed").split("|");
     _logScale = searchParams.get("scale") == "log";
     _alignment = searchParams.get("alignment");
@@ -336,9 +302,8 @@ function AlignmentUpdated() {
 }
 
 function SelectTopCountries(count) {
-    const all = Object.entries(_confirmedPerCountry);
-    const real = all.filter(x => x[0] != "World" && typeof x[1][0] === "number");
-    const maxPerCountry = real.filter(x => x[0] != "World").map(x => [x[0], Math.max(...x[1])]);
+    const countries = Object.keys($countries).filter(x => x != "World");
+    const maxPerCountry = countries.map(x => [ x, ((($localeData[x] || []).slice(-1))[0] || {}).Confirmed || 0 ]);
     maxPerCountry.sort((a, b) => b[1] - a[1]);
     _selectedCountries = maxPerCountry.slice(0, count).map(x => x[0]);
     $('#country-select').selectpicker('val', _selectedCountries);
@@ -351,7 +316,7 @@ $(document).ready(function() {
         if (clickedIndex === null) return;
         let multiselect = $('#country-select')[0].hasAttribute('multiple');
         let index = multiselect ? clickedIndex : clickedIndex - 1;
-        let country = _countries[index];
+        let country = Object.keys($countries)[index];
 
         if (multiselect) {
             const existingIndex = _selectedCountries.indexOf(country);
@@ -373,28 +338,30 @@ $(document).ready(function() {
     $("#top10").click(() => SelectTopCountries(10));
     $("#top25").click(() => SelectTopCountries(25));
 
+    ++$requestsPending;
     Papa.parse("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv", 
         {
             download: true,
             dynamicTyping: true,
             complete: function(results) {
-                const data = results.data;
-                _dates = data[0].slice(4); // All available dates
-                StoreCountries(data);
-                StoreConfirmedPerCountry(data);
-                _dataReceived++;
+                --$requestsPending;
+                if (results.error) throw new Error(results.error);
+                StoreDatesAndCountries(results.data);
+                StoreLocaleData("Confirmed", results.data);
                 CreateChartWhenDataReady();
             }
         }
     );
 
+    ++$requestsPending;
     Papa.parse("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv", 
         {
             download: true,
             dynamicTyping: true,
             complete: function(results) {
-                StoreDeathsPerCountry(results.data);
-                _dataReceived++;
+                --$requestsPending;
+                if (results.error) throw new Error(results.error);
+                StoreLocaleData("Deaths", results.data);
                 CreateChartWhenDataReady();
             }
         }
