@@ -345,7 +345,7 @@ $(document).ready(function() {
             dynamicTyping: true,
             complete: function(results) {
                 --$requestsPending;
-                if (results.error) throw new Error(results.error);
+                if (results.errors.length) throw new Error(results.errors);
                 StoreDatesAndCountries(results.data);
                 StoreLocaleData("Confirmed", results.data);
                 CreateChartWhenDataReady();
@@ -360,7 +360,7 @@ $(document).ready(function() {
             dynamicTyping: true,
             complete: function(results) {
                 --$requestsPending;
-                if (results.error) throw new Error(results.error);
+                if (results.errors.length) throw new Error(results.errors);
                 StoreLocaleData("Deaths", results.data);
                 CreateChartWhenDataReady();
             }
