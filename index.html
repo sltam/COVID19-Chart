@@ -50,15 +50,21 @@
                     <input name="alignment" type="radio" id="since100">Since 100</input>
                 </label>
             </div>
+        </header>
 
+        <header class="navbar">
             <div id="alignment" class="btn-group" aria-label="Case Kind">
+                <button class="btn btn-outline-secondary" id="world" label="World only">World</button>
                 <button class="btn btn-outline-secondary" id="top10" label="10 countries with most cases">Top 10</button>
                 <button class="btn btn-outline-secondary" id="top25" label="25 countries with most cases">Top 25</button>
+                <button class="btn btn-outline-secondary" id="topUS" label="US states with most cases">Top US</button>
+                <button class="btn btn-outline-secondary" id="topCN" label="China provinces with most cases">Top China</button>
+                <button class="btn btn-outline-secondary" id="topCA" label="Canada provinces">Canada</button>
             </div>
             <select id="country-select" class="selectpicker show-tick"
                 data-live-search="true" title="Choose Country..."
                 data-max-options="20" multiple
-                data-width="350px">
+                data-width="500px">
             </select>
         </header>
 

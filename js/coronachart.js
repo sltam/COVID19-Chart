@@ -3,6 +3,7 @@ const WORLD = "World";
 const $localeData = {}; // $localeData[localeName][date][key]
 const $countries = { [WORLD]: [] };
 const $provinces = {};
+const $areas = {};
 let $dates;
 let $coronaChart;
 let $countrySelect;
@@ -16,46 +17,13 @@ let _selectedCountries;
 let _selectedCaseKinds;
 
 
-function StoreDatesAndCountries(csvData) {
-    const header = csvData.shift();
-    $dates = header.slice(4); // All available dates
-    const rows = csvData.filter(row => row.length >= 4);
-    for (const row of rows) {
-        const [province, country, lat, long] = row;
-        $countries[country] = { Provinces: [] };
-    }
-    for (const row of rows) {
-        const [province, country, lat, long] = row;
-        const fullName = `${province}, ${country}`;
-        if (province == null || /^\W*$/.test(province) || $countries[fullName]) continue;
-        $provinces[fullName] = { Country: country, Name: province, FullName: fullName };
-        $countries[country].Provinces.push(fullName);
-    }
-}
-
-function StoreLocaleData(key, csvData) {
-    csvData = csvData.slice(1); // Drop header
-    for (const row of csvData.slice(1)) {
-        const [province, country, lat, long] = row;
-        const fullName = `${province}, ${country}`;
-        $localeData[fullName] = $localeData[fullName] || [];
-        $localeData[country] = $localeData[country] || [];
-        for (const [dayIndex, datum] of row.slice(4).entries()) {
-            $localeData[fullName][dayIndex] = $localeData[fullName][dayIndex] || { Confirmed: 0, Deaths: 0 };
-            $localeData[fullName][dayIndex][key] += datum;
-            $localeData[country][dayIndex] = $localeData[country][dayIndex] || { Confirmed: 0, Deaths: 0 };
-            $localeData[country][dayIndex][key] += datum;
-        }
-    }
-}
-
 function CalculateWorldData() {
     $localeData[WORLD] = [];
     for (const dayIndex in $dates) {
         let confirmed = 0, deaths = 0;
         for (const country in $countries) {
             // if (!$localeData[country])  console.info(`Missing $localeData[${country}]`);
-            const localeData = $localeData[country] || {};
+            const localeData = $localeData[country] || [];
             confirmed += (localeData[dayIndex] || {}).Confirmed || 0;
             deaths += (localeData[dayIndex] || {}).Deaths || 0;
         }
@@ -64,8 +32,8 @@ function CalculateWorldData() {
 }
 
 function CalculateIncrease() {
-    for (const country in $countries) {
-        const localeData = $localeData[country];
+    for (const locale in $localeData) {
+        const localeData = $localeData[locale];
         if (!localeData || !localeData[0]) continue;
         let last = localeData[0].Confirmed;
         for (const dayIndex in localeData) {
@@ -84,6 +52,7 @@ function PopulateSelectPicker() {
         if ((countryMetadata.Provinces || []).length > 0) {
             const optgroup = $("<optgroup>").attr("label", country);
             optgroup.append($("<option>").text(country));
+            countryMetadata.Provinces.sort();
             for (const province of countryMetadata.Provinces) {
                 optgroup.append($("<option>").text(province));
             }
@@ -152,7 +121,7 @@ function UpdateChartData() {
         for (const caseKind of _selectedCaseKinds) {
             const id = `${country}-${caseKind}`;
             const suffix = _selectedCaseKinds.length == 1 ? "" : `-${caseKind}`;
-            const cases = ($localeData[country] || []).map(x => (x ? x[caseKind] : {}));
+            const cases = ([...$localeData[country]]).map(x => (x ? x[caseKind] : NaN));
             const color = colorForCaseKind[caseKind].replace("%d", countryIndex * 360 / _selectedCountries.length);
             const dataset = functionForCaseKind[caseKind](`${country}${suffix}`, cases, color);
             dataset.id = id;
@@ -177,7 +146,7 @@ function UpdateChartData() {
     } else if (_alignment == "last28") {
         $coronaChart.data.labels = $dates.slice(shift);
     } else {
-        $coronaChart.data.labels = Array.from(Array(maxLength).entries()).map(x => x[0]); // 1 to maxLength
+        $coronaChart.data.labels = [...Array(maxLength).keys()]; // 1 to maxLength
     }
     $coronaChart.options.scales.yAxes[0].ticks.max = _logScale ? Math.pow(10, Math.ceil(Math.log10(maxValue))) : undefined;
     $coronaChart.options.scales.yAxes[1].display = _selectedCaseKinds.includes("Increase");
@@ -262,7 +231,7 @@ function UpdateButton(button, value) {
 function PopulateDefaultsFromURL() {
     const url = new URL(window.location);
     const searchParams = url.searchParams;
-    _selectedCountries = (searchParams.get("locales") || "World").split("|").filter(x => $countries[x]);
+    _selectedCountries = (searchParams.get("locales") || "World").split("|").filter(x => $localeData[x]);
     _selectedCaseKinds = (searchParams.get("casekinds") || "Confirmed").split("|");
     _logScale = searchParams.get("scale") == "log";
     _alignment = searchParams.get("alignment");
@@ -327,13 +296,117 @@ function SelectTopCountries(count) {
     const countries = Object.keys($countries).filter(x => x != "World");
     const maxPerCountry = countries.map(x => [ x, ((($localeData[x] || []).slice(-1))[0] || {}).Confirmed || 0 ]);
     maxPerCountry.sort((a, b) => b[1] - a[1]);
-    $countrySelect.selectpicker("val", maxPerCountry.slice(0, count).map(x => x[0]));
+    $countrySelect.selectpicker("val", [WORLD, ...maxPerCountry.slice(0, count).map(x => x[0])]);
+}
+
+function SelectTopProvinces(count, country) {
+    const provinces = $countries[country].Provinces;
+    const maxPerCountry = provinces.map(x => [ x, ((($localeData[x] || []).slice(-1))[0] || {}).Confirmed || 0 ]);
+    maxPerCountry.sort((a, b) => b[1] - a[1]);
+    $countrySelect.selectpicker("val", [country, ...maxPerCountry.slice(0, count).map(x => x[0])]);
+}
+
+
+// This is only used for detailed data. We assume country data are pre-filled via time series.
+function StoreLocaleData(provinceFullName, dayIndex, key, datum) {
+    const provinceData = $localeData[provinceFullName] = $localeData[provinceFullName] || [];
+    const dayData = provinceData[dayIndex] = provinceData[dayIndex] || { Confirmed: 0, Deaths: 0 };
+    dayData[key] += datum;
+}
+
+function StoreTimeSeriesData(key, table) {
+    const rows = table.slice(1).filter(row => row.length > 1);
+    for (const row of rows) {
+        let [province, country, lat, long] = row;
+        country = country ? country.trim() : null;
+        province = province ? province.trim() : null;
+        if (country == "Korea, South") country = "South Korea";
+        if (country == "Taiwan*") country = "Taiwan";
+        if (province == "Hong Kong" || province == "Macau") [country, province] = [province, null];
+        if (province && country == "US") province = null;
+        $countries[country] = $countries[country] || { Provinces: [] };
+
+        const fullName = `${country}>${province}`;
+        if (province && !/^\W*$/.test(province) && !$countries[fullName] && !$provinces[fullName]) {
+            $provinces[fullName] = { Country: country, Name: province, FullName: fullName };
+            $countries[country].Provinces.push(fullName);
+        }
+
+        const provinceData = $localeData[fullName] = $localeData[fullName] || [];
+        const countryData = $localeData[country] = $localeData[country] || [];
+        for (const [dayIndex, datum] of row.slice(4).entries()) {
+            provinceData[dayIndex] = provinceData[dayIndex] || { Confirmed: 0, Deaths: 0 };
+            provinceData[dayIndex][key] += datum;
+            countryData[dayIndex] = countryData[dayIndex] || { Confirmed: 0, Deaths: 0 };
+            countryData[dayIndex][key] += datum;
+        }
+    }
+}
+
+function ProcessPerDayData(dateString, dayIndex, results) {
+    --$requestsPending;
+    if (results.errors.length) throw new Error(results.errors);
+    const data = results.data;
+    const cols = data.shift();
+    for (const row of data) {
+        if (row.length <= 1) continue;
+        const dict = {};
+        for (const [colIndex, name] of cols.entries()) {
+            dict[name.replace(/[_\/ ]/g, "")] = row[colIndex];
+        }
+        // if (dict["Admin2"]) continue;
+        let area = dict["Admin2"];
+        let province = dict["ProvinceState"];
+        let country = dict["CountryRegion"];
+        if (province == country) province = null;
+        if (country == "Mainland China") country = "China";
+        if (province == "Hong Kong") [province, country] = [null, "Hong Kong"];
+        if (province == "Macau") [province, country] = [null, "Macau"];
+        if (province == "Taiwan") [province, country] = [null, "Taiwan"];
+        if (province == "Cruise Ship") [province, country] = [null, "Cruise Ship"];
+        if (province == "Diamond Princess") [province, country] = [null, "Diamond Princess"];
+        if (province == "Diamond Princess cruise ship") [province, country] = [null, "Diamond Princess"];
+        if (country == "US") province = StateMapping()[province] || province;
+        if (province && province.includes(", ")) [area, province] = province.split(", ");
+        if (province) province = province.replace(/ County$/, "");
+
+        if (country != "US") continue;
+        if (!$countries[country]) { console.info(`Country not previous seen in time series: ${country}`, row); continue; }
+
+        const provinceFullName = `${country}>${province}`;
+        const fullName = provinceFullName + (area ? `>${area}` : "");
+        if (province && !$provinces[provinceFullName]) {
+            $provinces[provinceFullName] = { Country: country, Name: province, FullName: provinceFullName, Areas: [] };
+            $countries[country].Provinces.push(provinceFullName);
+        }
+        if (province && area && !$areas[fullName]) {
+            $areas[fullName] = { Country: country, Province: provinceFullName, Name: area, FullName: fullName };
+            $provinces[provinceFullName].Areas.push(fullName);
+        }
+
+        StoreLocaleData(provinceFullName, dayIndex, "Confirmed", dict["Confirmed"]);
+        StoreLocaleData(provinceFullName, dayIndex, "Deaths", dict["Deaths"]);
+        if (area) {
+            StoreLocaleData(fullName, dayIndex, "Confirmed", dict["Confirmed"]);
+            StoreLocaleData(fullName, dayIndex, "Deaths", dict["Deaths"]);
+        }
+    }
+    CreateChartWhenDataReady();
+}
+
+function RequestPerDayData() {
+    for (const [dayIndex, dateString] of $dates.entries()) {
+        const [m, d] = dateString.split("/");
+        const filename = `${m.padStart(2, "0")}-${d.padStart(2, "0")}-2020.csv`;
+        ++$requestsPending;
+        Papa.parse(`https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/${filename}`, { download: true, dynamicTyping: true, complete: results => ProcessPerDayData(dateString, dayIndex, results) });
+    }
 }
 
 $(document).ready(function() {
     $countrySelect = $("#country-select");
     $countrySelect.selectpicker();
-    $countrySelect.on("changed.bs.select", function(e, clickedIndex, isSelected, previousValue) {
+    $countrySelect.on("changed.bs.select", function (e, clickedIndex, isSelected, previousValue) {
         _selectedCountries = $countrySelect.val();
         UpdateURL();
         UpdateChartData();
@@ -342,8 +415,15 @@ $(document).ready(function() {
     $("#scale").change(ChartScaleUpdated);
     $("#caseKind").change(CaseKindUpdated);
     $("#alignment").change(AlignmentUpdated);
+    $("#world").click(() => $countrySelect.selectpicker("val", [WORLD]));
     $("#top10").click(() => SelectTopCountries(10));
     $("#top25").click(() => SelectTopCountries(25));
+    $("#topUS").click(() => SelectTopProvinces(10, "US"));
+    $("#topCN").click(() => SelectTopProvinces(10, "China"));
+    $("#topAU").click(() => SelectTopProvinces(10, "Australia"));
+    $("#topCA").click(() => SelectTopProvinces(10, "Canada"));
+    $("#topFR").click(() => SelectTopProvinces(10, "France"));
+    $("#topGB").click(() => SelectTopProvinces(10, "United Kingdom"));
 
     ++$requestsPending;
     Papa.parse("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv", 
@@ -353,9 +433,10 @@ $(document).ready(function() {
             complete: function(results) {
                 --$requestsPending;
                 if (results.errors.length) throw new Error(results.errors);
-                StoreDatesAndCountries(results.data);
-                StoreLocaleData("Confirmed", results.data);
-                CreateChartWhenDataReady();
+                $dates = results.data[0].slice(4); // All available dates
+                StoreTimeSeriesData("Confirmed", results.data);
+                RequestPerDayData();
+                // CreateChartWhenDataReady();
             }
         }
     );
@@ -368,9 +449,65 @@ $(document).ready(function() {
             complete: function(results) {
                 --$requestsPending;
                 if (results.errors.length) throw new Error(results.errors);
-                StoreLocaleData("Deaths", results.data);
+                StoreTimeSeriesData("Deaths", results.data);
                 CreateChartWhenDataReady();
             }
         }
     );
 });
+
+function StateMapping() {
+    return {
+        "Alabama": "AL",
+        "Alaska": "AK",
+        "Arizona": "AZ",
+        "Arkansas": "AR",
+        "California": "CA",
+        "Colorado": "CO",
+        "Connecticut": "CT",
+        "Delaware": "DE",
+        "Florida": "FL",
+        "Georgia": "GA",
+        "Hawaii": "HI",
+        "Idaho": "ID",
+        "Illinois": "IL",
+        "Indiana": "IN",
+        "Iowa": "IA",
+        "Kansas": "KS",
+        "Kentucky": "KY",
+        "Louisiana": "LA",
+        "Maine": "ME",
+        "Maryland": "MD",
+        "Massachusetts": "MA",
+        "Michigan": "MI",
+        "Minnesota": "MN",
+        "Mississippi": "MS",
+        "Missouri": "MO",
+        "Montana": "MT",
+        "Nebraska": "NE",
+        "Nevada": "NV",
+        "New Hampshire": "NH",
+        "New Jersey": "NJ",
+        "New Mexico": "NM",
+        "New York": "NY",
+        "North Carolina": "NC",
+        "North Dakota": "ND",
+        "Ohio": "OH",
+        "Oklahoma": "OK",
+        "Oregon": "OR",
+        "Pennsylvania": "PA",
+        "Rhode Island": "RI",
+        "South Carolina": "SC",
+        "South Dakota": "SD",
+        "Tennessee": "TN",
+        "Texas": "TX",
+        "Utah": "UT",
+        "Vermont": "VT",
+        "Virginia": "VA",
+        "Washington": "WA",
+        "West Virginia": "WV",
+        "Wisconsin": "WI",
+        "Wyoming": "WY",
+        "District of Columbia": "DC",
+    };
+}
