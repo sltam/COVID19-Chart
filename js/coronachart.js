@@ -2,8 +2,11 @@
 const WORLD = "World";
 const $localeData = {}; // $localeData[localeName][date][key]
 const $countries = { [WORLD]: [] };
-let _coronaChart = null;
+const $provinces = {};
 let $dates;
+let $coronaChart;
+let $countrySelect;
+
 let $requestsPending = 0;
 
 // Properties
@@ -16,10 +19,17 @@ let _selectedCaseKinds;
 function StoreDatesAndCountries(csvData) {
     const header = csvData.shift();
     $dates = header.slice(4); // All available dates
-    const rows = csvData;
-    const countries = rows.map(x => x[1]);
-    for (const country of countries) {
-        $countries[country] = {};
+    const rows = csvData.filter(row => row.length >= 4);
+    for (const row of rows) {
+        const [province, country, lat, long] = row;
+        $countries[country] = { Provinces: [] };
+    }
+    for (const row of rows) {
+        const [province, country, lat, long] = row;
+        const fullName = `${province}, ${country}`;
+        if (province == null || /^\W*$/.test(province) || $countries[fullName]) continue;
+        $provinces[fullName] = { Country: country, Name: province, FullName: fullName };
+        $countries[country].Provinces.push(fullName);
     }
 }
 
@@ -27,8 +37,12 @@ function StoreLocaleData(key, csvData) {
     csvData = csvData.slice(1); // Drop header
     for (const row of csvData.slice(1)) {
         const [province, country, lat, long] = row;
+        const fullName = `${province}, ${country}`;
+        $localeData[fullName] = $localeData[fullName] || [];
         $localeData[country] = $localeData[country] || [];
         for (const [dayIndex, datum] of row.slice(4).entries()) {
+            $localeData[fullName][dayIndex] = $localeData[fullName][dayIndex] || { Confirmed: 0, Deaths: 0 };
+            $localeData[fullName][dayIndex][key] += datum;
             $localeData[country][dayIndex] = $localeData[country][dayIndex] || { Confirmed: 0, Deaths: 0 };
             $localeData[country][dayIndex][key] += datum;
         }
@@ -41,9 +55,9 @@ function CalculateWorldData() {
         let confirmed = 0, deaths = 0;
         for (const country in $countries) {
             // if (!$localeData[country])  console.info(`Missing $localeData[${country}]`);
-            const countryData = $localeData[country] || {};
-            confirmed += (countryData[dayIndex] || {}).Confirmed || 0;
-            deaths += (countryData[dayIndex] || {}).Deaths || 0;
+            const localeData = $localeData[country] || {};
+            confirmed += (localeData[dayIndex] || {}).Confirmed || 0;
+            deaths += (localeData[dayIndex] || {}).Deaths || 0;
         }
         $localeData[WORLD][dayIndex] = { Confirmed: confirmed, Deaths: deaths };
     }
@@ -51,26 +65,34 @@ function CalculateWorldData() {
 
 function CalculateIncrease() {
     for (const country in $countries) {
-        const countryData = $localeData[country];
-        if (!countryData) continue;
-        let last = countryData[0].Confirmed;
-        for (const dayIndex in countryData) {
-            const current = countryData[dayIndex].Confirmed;
+        const localeData = $localeData[country];
+        if (!localeData || !localeData[0]) continue;
+        let last = localeData[0].Confirmed;
+        for (const dayIndex in localeData) {
+            const current = localeData[dayIndex].Confirmed;
             if (last > 0) {
-                countryData[dayIndex].Increase = 100 * (current - last) / last;
+                localeData[dayIndex].Increase = 100 * (current - last) / last;
             }
             last = current;
         }
     }
 }
 
-function AddCountriesToSelectPicker($countries) {
-    let select = $("#country-select");
-    select.contents().remove();
-    for (const country in $countries) {
-        select.append("<option>" + country + "</option>");
+function PopulateSelectPicker() {
+    $countrySelect.contents().remove();
+    for (const [country, countryMetadata] of Object.entries($countries)) {
+        if ((countryMetadata.Provinces || []).length > 0) {
+            const optgroup = $("<optgroup>").attr("label", country);
+            optgroup.append($("<option>").text(country));
+            for (const province of countryMetadata.Provinces) {
+                optgroup.append($("<option>").text(province));
+            }
+            $countrySelect.append(optgroup);
+        } else {
+            $countrySelect.append($("<option>").text(country));
+        }
     }
-    select.selectpicker('refresh');
+    $countrySelect.selectpicker("refresh");
 }
 
 function CreatePeopleDataset(label, data, color) {
@@ -81,8 +103,8 @@ function CreatePeopleDataset(label, data, color) {
         fill: false,
         lineTension: 0,
         borderColor: color,
-        yAxisID: 'left-y-axis'
-    }
+        yAxisID: "left-y-axis",
+    };
 }
 
 function CreatePercentageDataset(label, data, color) {
@@ -93,12 +115,12 @@ function CreatePercentageDataset(label, data, color) {
         fill: false,
         lineTension: 0,
         borderColor: color,
-        yAxisID: 'right-y-axis'
-    }
+        yAxisID: "right-y-axis",
+    };
 }
 
 function ClearChartData() {
-    _coronaChart.data.datasets = [];
+    $coronaChart.data.datasets = [];
 }
 
 function UpdateChartData() {
@@ -113,7 +135,7 @@ function UpdateChartData() {
         Increase: "hsl(%d, 30%, 70%, 1.0)",
     };
 
-    const datasets = _coronaChart.data.datasets;
+    const datasets = $coronaChart.data.datasets;
     const datasetByID = {};
     datasets.forEach(dataset => datasetByID[dataset.id] = dataset);
     datasets.splice(0, datasets.length);
@@ -151,21 +173,21 @@ function UpdateChartData() {
     }
 
     if (_alignment == "date") {
-        _coronaChart.data.labels = $dates.map(s => s.split("/").slice(0, 2).join("/"));
+        $coronaChart.data.labels = $dates.map(s => s.split("/").slice(0, 2).join("/"));
     } else if (_alignment == "last28") {
-        _coronaChart.data.labels = $dates.slice(shift);
+        $coronaChart.data.labels = $dates.slice(shift);
     } else {
-        _coronaChart.data.labels = Array.from(Array(maxLength).entries()).map(x => x[0]); // 1 to maxLength
+        $coronaChart.data.labels = Array.from(Array(maxLength).entries()).map(x => x[0]); // 1 to maxLength
     }
-    _coronaChart.options.scales.yAxes[0].ticks.max = _logScale ? Math.pow(10, Math.ceil(Math.log10(maxValue))) : undefined;
-    _coronaChart.options.scales.yAxes[1].display = _selectedCaseKinds.includes("Increase");
-    _coronaChart.update();
+    $coronaChart.options.scales.yAxes[0].ticks.max = _logScale ? Math.pow(10, Math.ceil(Math.log10(maxValue))) : undefined;
+    $coronaChart.options.scales.yAxes[1].display = _selectedCaseKinds.includes("Increase");
+    $coronaChart.update();
 }
 
 function CreateChart() {
     let ctx = document.getElementById("coronaChart");
 
-    _coronaChart = new Chart(ctx, {
+    $coronaChart = new Chart(ctx, {
         type: "line",
         fill: false,
         data: {
@@ -217,14 +239,14 @@ function CreateChartWhenDataReady() {
     PopulateDefaultsFromURL();
     CalculateWorldData();
     CalculateIncrease();
-    AddCountriesToSelectPicker($countries);
+    PopulateSelectPicker();
 
     CreateChart();
     ChartScaleUpdated();
     CaseKindUpdated();
     AlignmentUpdated();
 
-    $('#country-select').selectpicker('val', _selectedCountries);
+    $countrySelect.selectpicker("val", _selectedCountries);
     UpdateChartData();
 }
 
@@ -268,9 +290,9 @@ function UpdateURL() {
 function ChartScaleUpdated() {
     _logScale = $("#logarithmic").prop("checked")
     if (_logScale) {
-        _coronaChart.options.scales.yAxes[0].type = "logarithmic";
+        $coronaChart.options.scales.yAxes[0].type = "logarithmic";
     } else {
-        _coronaChart.options.scales.yAxes[0].type = "linear";
+        $coronaChart.options.scales.yAxes[0].type = "linear";
     }
     UpdateChartData();
     UpdateURL();
@@ -305,29 +327,14 @@ function SelectTopCountries(count) {
     const countries = Object.keys($countries).filter(x => x != "World");
     const maxPerCountry = countries.map(x => [ x, ((($localeData[x] || []).slice(-1))[0] || {}).Confirmed || 0 ]);
     maxPerCountry.sort((a, b) => b[1] - a[1]);
-    _selectedCountries = maxPerCountry.slice(0, count).map(x => x[0]);
-    $('#country-select').selectpicker('val', _selectedCountries);
-    UpdateChartData();
+    $countrySelect.selectpicker("val", maxPerCountry.slice(0, count).map(x => x[0]));
 }
 
 $(document).ready(function() {
-    $('#country-select').selectpicker();
-    $('#country-select').on('changed.bs.select', function(e, clickedIndex, isSelected, previousValue) {
-        if (clickedIndex === null) return;
-        let multiselect = $('#country-select')[0].hasAttribute('multiple');
-        let index = multiselect ? clickedIndex : clickedIndex - 1;
-        let country = Object.keys($countries)[index];
-
-        if (multiselect) {
-            const existingIndex = _selectedCountries.indexOf(country);
-            if (existingIndex < 0) {
-                _selectedCountries.push(country);
-            } else {
-                _selectedCountries.splice(existingIndex, 1);
-            }
-        } else {
-            _selectedCountries = [country];
-        }
+    $countrySelect = $("#country-select");
+    $countrySelect.selectpicker();
+    $countrySelect.on("changed.bs.select", function(e, clickedIndex, isSelected, previousValue) {
+        _selectedCountries = $countrySelect.val();
         UpdateURL();
         UpdateChartData();
     });
