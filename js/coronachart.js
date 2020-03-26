@@ -39,7 +39,8 @@ function CalculateIncrease() {
         for (const dayIndex in localeData) {
             const current = localeData[dayIndex].Confirmed;
             if (last > 0) {
-                localeData[dayIndex].Increase = 100 * (current - last) / last;
+                localeData[dayIndex].New = current - last;
+                localeData[dayIndex].Growth = Math.round(10000 * (current - last) / last) / 100;
             }
             last = current;
         }
@@ -64,44 +65,22 @@ function PopulateSelectPicker() {
     $countrySelect.selectpicker("refresh");
 }
 
-function CreatePeopleDataset(label, data, color) {
-    return {
-        label: label,
-        data: data,
-        borderWidth: 1,
-        fill: false,
-        lineTension: 0,
-        borderColor: color,
-        yAxisID: "left-y-axis",
-    };
-}
-
-function CreatePercentageDataset(label, data, color) {
-    return {
-        label: label,
-        data: data,
-        borderWidth: 1,
-        fill: false,
-        lineTension: 0,
-        borderColor: color,
-        yAxisID: "right-y-axis",
-    };
-}
-
 function ClearChartData() {
     $coronaChart.data.datasets = [];
 }
 
 function UpdateChartData() {
-    const functionForCaseKind = {
-        Confirmed: CreatePeopleDataset,
-        Deaths: CreatePeopleDataset,
-        Increase: CreatePercentageDataset,
-    };
     const colorForCaseKind = {
         Confirmed: "hsl(%d, 70%, 70%, 0.7)",
         Deaths: "hsl(%d, 70%, 30%, 0.5)",
-        Increase: "hsl(%d, 30%, 70%, 1.0)",
+        New: "hsl(%d, 50%, 50%, 1.0)",
+        Growth: "hsl(%d, 30%, 70%, 1.0)",
+    };
+    const pointStylesForCaseKind = {
+        Confirmed: "circle",
+        Deaths: "crossRot",
+        New: "star",
+        Growth: "triangle",
     };
 
     const datasets = $coronaChart.data.datasets;
@@ -123,7 +102,18 @@ function UpdateChartData() {
             const suffix = _selectedCaseKinds.length == 1 ? "" : `-${caseKind}`;
             const cases = ([...$localeData[country]]).map(x => (x ? x[caseKind] : NaN));
             const color = colorForCaseKind[caseKind].replace("%d", countryIndex * 360 / _selectedCountries.length);
-            const dataset = functionForCaseKind[caseKind](`${country}${suffix}`, cases, color);
+            const pointStyle = pointStylesForCaseKind[caseKind];
+            const dataset = {
+                borderColor: color,
+                borderWidth: 1,
+                data: cases,
+                fill: false,
+                label: `${country}${suffix}`,
+                lineTension: 0,
+                pointBackgroundColor: color,
+                pointStyle,
+            };
+            dataset.yAxisID = caseKind == "Growth" ? "right-y-axis" : "left-y-axis";
             dataset.id = id;
             dataset.data = dataset.data.slice(shift);
             const existingDataSet = datasetByID[id];
@@ -149,7 +139,7 @@ function UpdateChartData() {
         $coronaChart.data.labels = [...Array(maxLength).keys()]; // 1 to maxLength
     }
     $coronaChart.options.scales.yAxes[0].ticks.max = _logScale ? Math.pow(10, Math.ceil(Math.log10(maxValue))) : undefined;
-    $coronaChart.options.scales.yAxes[1].display = _selectedCaseKinds.includes("Increase");
+    $coronaChart.options.scales.yAxes[1].display = _selectedCaseKinds.includes("Growth");
     $coronaChart.update();
 }
 
@@ -205,10 +195,10 @@ function CreateChartWhenDataReady() {
         return;
     }
 
-    PopulateDefaultsFromURL();
     CalculateWorldData();
     CalculateIncrease();
     PopulateSelectPicker();
+    PopulateDefaultsFromURL();
 
     CreateChart();
     ChartScaleUpdated();
@@ -231,7 +221,11 @@ function UpdateButton(button, value) {
 function PopulateDefaultsFromURL() {
     const url = new URL(window.location);
     const searchParams = url.searchParams;
-    _selectedCountries = (searchParams.get("locales") || "World").split("|").filter(x => $localeData[x]);
+    _selectedCountries = (searchParams.get("locales") || "World").split("|").filter(locale => {
+        const selected = !!$localeData[locale];
+        if (!selected) console.log(`Dropped missing locale: ${locale}`);
+        return selected;
+    });
     _selectedCaseKinds = (searchParams.get("casekinds") || "Confirmed").split("|");
     _logScale = searchParams.get("scale") == "log";
     _alignment = searchParams.get("alignment");
@@ -239,7 +233,8 @@ function PopulateDefaultsFromURL() {
     UpdateButton($("#linear"), !_logScale);
     UpdateButton($("#confirmed"), _selectedCaseKinds.includes("Confirmed"));
     UpdateButton($("#deaths"), _selectedCaseKinds.includes("Deaths"));
-    UpdateButton($("#increase"), _selectedCaseKinds.includes("Increase"));
+    UpdateButton($("#new"), _selectedCaseKinds.includes("New"));
+    UpdateButton($("#growth"), _selectedCaseKinds.includes("Growth"));
     UpdateButton($("#date"), _alignment == "date");
     UpdateButton($("#last28"), _alignment == "last28");
     UpdateButton($("#since100"), _alignment == "since100");
@@ -275,8 +270,11 @@ function CaseKindUpdated() {
     if ($("#deaths").prop("checked")) {
         _selectedCaseKinds.push("Deaths");
     }
-    if ($("#increase").prop("checked")) {
-        _selectedCaseKinds.push("Increase");
+    if ($("#new").prop("checked")) {
+        _selectedCaseKinds.push("New");
+    }
+    if ($("#growth").prop("checked")) {
+        _selectedCaseKinds.push("Growth");
     }
     UpdateChartData();
     UpdateURL();
