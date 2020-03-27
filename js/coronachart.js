@@ -105,6 +105,7 @@ function UpdateChartData() {
             const color = colorForCaseKind[caseKind].replace("%d", countryIndex * 360 / _selectedCountries.length);
             const pointStyle = pointStylesForCaseKind[caseKind];
             const dataset = {
+                backgroundColor: color,
                 borderColor: color,
                 borderWidth: 1,
                 data: cases,
@@ -114,7 +115,7 @@ function UpdateChartData() {
                 pointBackgroundColor: color,
                 pointStyle,
             };
-            dataset.yAxisID = caseKind == "Growth" ? "right-y-axis" : "left-y-axis";
+            dataset.yAxisID = caseKind == "Growth" ? "yRight" : "yLeft";
             dataset.id = id;
             dataset.data = dataset.data.slice(shift);
             const existingDataSet = datasetByID[id];
@@ -139,8 +140,8 @@ function UpdateChartData() {
     } else {
         $coronaChart.data.labels = [...Array(maxLength).keys()]; // 1 to maxLength
     }
-    $coronaChart.options.scales.yAxes[0].ticks.max = _logScale ? Math.pow(10, Math.ceil(Math.log10(maxValue))) : undefined;
-    $coronaChart.options.scales.yAxes[1].display = _selectedCaseKinds.includes("Growth");
+    $coronaChart.options.scales["yLeft"].ticks.max = _logScale ? Math.pow(10, Math.ceil(Math.log10(maxValue))) : undefined;
+    $coronaChart.options.scales["yRight"].display = _selectedCaseKinds.includes("Growth");
     $coronaChart.update();
 }
 
@@ -156,36 +157,35 @@ function CreateChart() {
         },
         options: {
             legend: {
+                display: true,
                 position: "right",
             },
             scales: {
-                yAxes: [
-                    {
-                        id: "left-y-axis",
-                        scaleLabel: {
-                            display: true,
-                            labelString: "# of people",
-                        },
-                        ticks: {
-                            beginAtZero: true,
-                            maxTicksLimit: 12,
-                        },
-                        type: "linear",
-                        position: "left",
+                "yLeft": {
+                    id: "yLeft",
+                    scaleLabel: {
+                        display: true,
+                        labelString: "# of people",
                     },
-                    {
-                        id: "right-y-axis",
-                        scaleLabel: {
-                            display: true,
-                            labelString: "%increase",
-                        },
-                        ticks: {
-                            min: 0,
-                        },
-                        type: "linear",
-                        position: "right",
-                    }
-                ]
+                    ticks: {
+                        beginAtZero: true,
+                        maxTicksLimit: 12,
+                    },
+                    type: "linear",
+                    position: "left",
+                },
+                "yRight": {
+                    id: "yRight",
+                    scaleLabel: {
+                        display: true,
+                        labelString: "%increase",
+                    },
+                    ticks: {
+                        min: 0,
+                    },
+                    type: "linear",
+                    position: "right",
+                }
             }
         }
     });
@@ -263,9 +263,9 @@ function UpdateURL() {
 function ChartScaleUpdated() {
     _logScale = $("#logarithmic").prop("checked")
     if (_logScale) {
-        $coronaChart.options.scales.yAxes[0].type = "logarithmic";
+        $coronaChart.options.scales["yLeft"].type = "logarithmic";
     } else {
-        $coronaChart.options.scales.yAxes[0].type = "linear";
+        $coronaChart.options.scales["yLeft"].type = "linear";
     }
     UpdateChartData();
     UpdateURL();
