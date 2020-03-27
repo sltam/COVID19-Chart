@@ -237,14 +237,14 @@ function PopulateDefaultsFromURL() {
     }
     _selectedCaseKinds = (searchParams.get("casekinds") || "Confirmed").split("|");
     _logScale = searchParams.get("scale") != "linear";
-    _alignment = searchParams.get("alignment");
+    _alignment = searchParams.get("alignment") || "all";
     UpdateButton($("#logarithmic"), _logScale);
     UpdateButton($("#linear"), !_logScale);
     UpdateButton($("#confirmed"), _selectedCaseKinds.includes("Confirmed"));
     UpdateButton($("#deaths"), _selectedCaseKinds.includes("Deaths"));
     UpdateButton($("#new"), _selectedCaseKinds.includes("New"));
     UpdateButton($("#growth"), _selectedCaseKinds.includes("Growth"));
-    UpdateButton($("#all"), _alignment == "all" || !_alignment);
+    UpdateButton($("#all"), _alignment == "all");
     UpdateButton($("#last28"), _alignment == "last28");
     UpdateButton($("#since100"), _alignment == "since100");
 }
