@@ -132,7 +132,7 @@ function UpdateChartData() {
         }
     }
 
-    if (_alignment == "date") {
+    if (_alignment == "all") {
         $coronaChart.data.labels = $dates.map(s => s.split("/").slice(0, 2).join("/"));
     } else if (_alignment == "last28") {
         $coronaChart.data.labels = $dates.slice(shift);
@@ -219,16 +219,24 @@ function UpdateButton(button, value) {
     }
 }
 
+function SelectCountries(countries) {
+    $countrySelect.selectpicker("val", countries);
+}
+
 function PopulateDefaultsFromURL() {
     const url = new URL(window.location);
     const searchParams = url.searchParams;
-    _selectedCountries = (searchParams.get("locales") || "World").split("|").filter(locale => {
-        const selected = !!$localeData[locale];
-        if (!selected) console.log(`Dropped missing locale: ${locale}`);
-        return selected;
-    });
+    if (searchParams.get("locales")) {
+        _selectedCountries = searchParams.get("locales").split("|").filter(locale => {
+            const selected = !!$localeData[locale];
+            if (!selected) console.log(`Dropped missing locale: ${locale}`);
+            return selected;
+        });
+    } else {
+        _selectedCountries = GetTopCountries(10);
+    }
     _selectedCaseKinds = (searchParams.get("casekinds") || "Confirmed").split("|");
-    _logScale = searchParams.get("scale") == "log";
+    _logScale = searchParams.get("scale") != "linear";
     _alignment = searchParams.get("alignment");
     UpdateButton($("#logarithmic"), _logScale);
     UpdateButton($("#linear"), !_logScale);
@@ -236,7 +244,7 @@ function PopulateDefaultsFromURL() {
     UpdateButton($("#deaths"), _selectedCaseKinds.includes("Deaths"));
     UpdateButton($("#new"), _selectedCaseKinds.includes("New"));
     UpdateButton($("#growth"), _selectedCaseKinds.includes("Growth"));
-    UpdateButton($("#date"), _alignment == "date");
+    UpdateButton($("#all"), _alignment == "all" || !_alignment);
     UpdateButton($("#last28"), _alignment == "last28");
     UpdateButton($("#since100"), _alignment == "since100");
 }
@@ -282,7 +290,7 @@ function CaseKindUpdated() {
 }
 
 function AlignmentUpdated() {
-    const alignment = $("#date").prop("checked") ? "date" : $("#last28").prop("checked") ? "last28" : "since100";
+    const alignment = $("#all").prop("checked") ? "all" : $("#last28").prop("checked") ? "last28" : "since100";
     if (_alignment != alignment) {
         ClearChartData();
     }
@@ -291,18 +299,18 @@ function AlignmentUpdated() {
     UpdateURL();
 }
 
-function SelectTopCountries(count) {
-    const countries = Object.keys($countries).filter(x => x != "World");
+function GetTopCountries(count) {
+    const countries = Object.keys($countries).filter(x => x != WORLD);
     const maxPerCountry = countries.map(x => [ x, ((($localeData[x] || []).slice(-1))[0] || {}).Confirmed || 0 ]);
     maxPerCountry.sort((a, b) => b[1] - a[1]);
-    $countrySelect.selectpicker("val", [WORLD, ...maxPerCountry.slice(0, count).map(x => x[0])]);
+    return [WORLD, ...maxPerCountry.slice(0, count).map(x => x[0])];
 }
 
-function SelectTopProvinces(count, country) {
+function GetTopProvinces(count, country) {
     const provinces = $countries[country].Provinces;
     const maxPerCountry = provinces.map(x => [ x, ((($localeData[x] || []).slice(-1))[0] || {}).Confirmed || 0 ]);
     maxPerCountry.sort((a, b) => b[1] - a[1]);
-    $countrySelect.selectpicker("val", [country, ...maxPerCountry.slice(0, count).map(x => x[0])]);
+    return [country, ...maxPerCountry.slice(0, count).map(x => x[0])];
 }
 
 
@@ -421,14 +429,14 @@ $(document).ready(function() {
     $("#caseKind").change(CaseKindUpdated);
     $("#alignment").change(AlignmentUpdated);
     $("#world").click(() => $countrySelect.selectpicker("val", [WORLD]));
-    $("#top10").click(() => SelectTopCountries(10));
-    $("#top25").click(() => SelectTopCountries(25));
-    $("#topUS").click(() => SelectTopProvinces(10, "US"));
-    $("#topCN").click(() => SelectTopProvinces(10, "China"));
-    $("#topAU").click(() => SelectTopProvinces(10, "Australia"));
-    $("#topCA").click(() => SelectTopProvinces(10, "Canada"));
-    $("#topFR").click(() => SelectTopProvinces(10, "France"));
-    $("#topGB").click(() => SelectTopProvinces(10, "United Kingdom"));
+    $("#top10").click(() => SelectCountries(GetTopCountries(10)));
+    $("#top25").click(() => SelectCountries(GetTopCountries(25)));
+    $("#topUS").click(() => SelectCountries(GetTopProvinces(10, "US")));
+    $("#topCN").click(() => SelectCountries(GetTopProvinces(10, "China")));
+    $("#topAU").click(() => SelectCountries(GetTopProvinces(10, "Australia")));
+    $("#topCA").click(() => SelectCountries(GetTopProvinces(10, "Canada")));
+    $("#topFR").click(() => SelectCountries(GetTopProvinces(10, "France")));
+    $("#topGB").click(() => SelectCountries(GetTopProvinces(10, "United Kingdom")));
 
     ++$requestsPending;
     Papa.parse("https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv", 
