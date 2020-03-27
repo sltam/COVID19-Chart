@@ -50,12 +50,13 @@ function CalculateIncrease() {
 function PopulateSelectPicker() {
     $countrySelect.contents().remove();
     for (const [country, countryMetadata] of Object.entries($countries)) {
-        if ((countryMetadata.Provinces || []).length > 0) {
+        const locales = [...countryMetadata.Provinces || [], ...countryMetadata.Areas || []];
+        if (locales.length > 0) {
+            locales.sort();
             const optgroup = $("<optgroup>").attr("label", country);
             optgroup.append($("<option>").text(country));
-            countryMetadata.Provinces.sort();
-            for (const province of countryMetadata.Provinces) {
-                optgroup.append($("<option>").text(province));
+            for (const locale of locales) {
+                optgroup.append($("<option>").text(locale));
             }
             $countrySelect.append(optgroup);
         } else {
@@ -322,7 +323,7 @@ function StoreTimeSeriesData(key, table) {
         if (country == "Taiwan*") country = "Taiwan";
         if (province == "Hong Kong" || province == "Macau") [country, province] = [province, null];
         if (province && country == "US") province = null;
-        $countries[country] = $countries[country] || { Provinces: [] };
+        $countries[country] = $countries[country] || { Provinces: [], Areas: [] };
 
         const fullName = `${country}>${province}`;
         if (province && !/^\W*$/.test(province) && !$countries[fullName] && !$provinces[fullName]) {
@@ -357,6 +358,8 @@ function ProcessPerDayData(dateString, dayIndex, results) {
         let province = dict["ProvinceState"];
         let country = dict["CountryRegion"];
         if (province == country) province = null;
+        if (!province) continue; // Country data are already reported in time series, so skip here.
+
         if (country == "Mainland China") country = "China";
         if (province == "Hong Kong") [province, country] = [null, "Hong Kong"];
         if (province == "Macau") [province, country] = [null, "Macau"];
@@ -365,10 +368,13 @@ function ProcessPerDayData(dateString, dayIndex, results) {
         if (province == "Diamond Princess") [province, country] = [null, "Diamond Princess"];
         if (province == "Diamond Princess cruise ship") [province, country] = [null, "Diamond Princess"];
         if (country == "US") province = StateMapping()[province] || province;
-        if (province && province.includes(", ")) [area, province] = province.split(", ");
-        if (province) province = province.replace(/ County$/, "");
+        if (country != "US") continue; // For now, because the rest aren't that working.
+        if (!province) continue; // Skip those Diamond Princess
 
-        if (country != "US") continue;
+        const match = province.match(/(.*), (\w\w)/);
+        if (match) [area, province] = [match[1], match[2]];
+        if (area) area = area.replace(/ County$/, "");
+
         if (!$countries[country]) { console.info(`Country not previous seen in time series: ${country}`, row); continue; }
 
         const provinceFullName = `${country}>${province}`;
@@ -380,6 +386,7 @@ function ProcessPerDayData(dateString, dayIndex, results) {
         if (province && area && !$areas[fullName]) {
             $areas[fullName] = { Country: country, Province: provinceFullName, Name: area, FullName: fullName };
             $provinces[provinceFullName].Areas.push(fullName);
+            $countries[country].Areas.push(fullName);
         }
 
         StoreLocaleData(provinceFullName, dayIndex, "Confirmed", dict["Confirmed"]);
